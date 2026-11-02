@@ -1,5 +1,3 @@
-import "dotenv/config";
-
 import app from "./app.js";
 import { connectToDatabase } from "./database/connection.js";
 import { env } from "./config/env.js";

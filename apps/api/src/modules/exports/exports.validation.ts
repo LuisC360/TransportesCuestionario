@@ -9,9 +9,6 @@ export const exportDateQuerySchema = z
     from: z.iso.date().optional(),
     to: z.iso.date().optional(),
   })
-  .refine((value) => value.from || value.to, {
-    message: "Provide at least one date filter (from or to)",
-  })
   .refine((value) => !value.from || !value.to || value.from <= value.to, {
     message: "from must be on or before to",
     path: ["to"],

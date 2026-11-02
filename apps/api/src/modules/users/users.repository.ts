@@ -44,4 +44,8 @@ export class UsersRepository {
       runValidators: true,
     }).select("-passwordHash");
   }
+
+  async deleteById(id: string) {
+    return UserModel.findByIdAndDelete(id).select("-passwordHash");
+  }
 }
