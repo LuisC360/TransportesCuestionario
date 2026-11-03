@@ -15,10 +15,9 @@ const surveysService = new SurveysService(new SurveysRepository());
 const responsesService = new ResponsesService(new ResponsesRepository(), surveysService);
 const controller = new ResponsesController(responsesService);
 
-router.use(authenticate);
-
 router.get(
   "/surveys/:surveyId/results",
+  authenticate,
   authorize("superadmin"),
   validateParams(responseSurveyIdParamSchema),
   controller.getResults,

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { BarChart3, ClipboardList, Download, Eye, EyeOff, KeyRound, Pencil, Plus, Trash2, Users, X } from 'lucide-react'
+import { BarChart3, ClipboardList, Download, Eye, EyeOff, KeyRound, Link2, Pencil, Plus, Trash2, Users, X } from 'lucide-react'
 import './App.css'
 
 type User = { id: string; email: string; role: 'superadmin' | 'user'; mustChangePassword: boolean }
@@ -23,6 +23,46 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const body = await response.json().catch(() => ({}))
   if (!response.ok) throw new Error(body.message ?? 'Ocurrió un error. Intenta de nuevo.')
   return body.data as T
+}
+
+function PublicSurvey({ surveyId }: { surveyId: string }) {
+  const [survey, setSurvey] = useState<Survey | null>(null)
+  const [answers, setAnswers] = useState<Record<string, string[]>>({})
+  const [error, setError] = useState('')
+  const [loading, setLoading] = useState(true)
+  const [submitted, setSubmitted] = useState(false)
+
+  useEffect(() => {
+    request<Survey>(`/api/responses/surveys/${surveyId}`).then(setSurvey).catch((e: Error) => setError(e.message)).finally(() => setLoading(false))
+  }, [surveyId])
+
+  function toggle(question: Question, optionId: string) {
+    setAnswers(current => {
+      const selectedIds = current[question.id] ?? []
+      if (!selectedIds.includes(optionId) && selectedIds.length >= question.maxSelections) return current
+      const next = selectedIds.includes(optionId) ? selectedIds.filter(id => id !== optionId) : question.maxSelections === 1 ? [optionId] : [...selectedIds, optionId]
+      return { ...current, [question.id]: next }
+    })
+  }
+
+  async function submit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (!survey) return
+    setError('')
+    const unanswered = survey.questions.find(question => (answers[question.id] ?? []).length < question.minSelections)
+    if (unanswered) { setError(`Selecciona al menos ${unanswered.minSelections} opción(es) para: ${unanswered.prompt}`); return }
+    try {
+      await request(`/api/responses/surveys/${survey.id}`, { method: 'POST', body: JSON.stringify({ version: survey.version, answers: survey.questions.map(question => ({ questionId: question.id, optionIds: answers[question.id] ?? [] })) }) })
+      setSubmitted(true)
+    } catch (e) { setError((e as Error).message) }
+  }
+
+  return <main className="shell public-shell"><header className="topbar"><a className="brand" href="/">TC<span>.</span></a><span className="public-label">Encuesta anónima</span></header><section className="content">
+    {loading ? <div className="centered"><p>Cargando encuesta…</p></div> : submitted ? <div className="public-success"><span className="eyebrow">RESPUESTA REGISTRADA</span><h1>¡Gracias por participar!</h1><p>Tu respuesta se guardó de forma anónima.</p></div> : survey ? <>
+      <div className="page-heading"><span className="eyebrow">ENCUESTA ANÓNIMA · VERSIÓN {survey.version}</span><h1>{survey.title}</h1><p>{survey.description}</p><small className="privacy-note">No necesitas iniciar sesión. No solicitamos datos personales.</small></div>
+      <form className="question-list" onSubmit={submit}>{survey.questions.map((question, index) => <fieldset className="question" key={question.id}><legend><span className="question-number">{String(index + 1).padStart(2, '0')}</span>{question.prompt}</legend><p className="hint">{question.minSelections === 0 ? 'Opcional' : `Selecciona al menos ${question.minSelections}`} · Máximo {question.maxSelections}</p><div className="options">{question.options.map(option => <label className="option" key={option.id}><input type={question.maxSelections === 1 ? 'radio' : 'checkbox'} name={question.id} checked={(answers[question.id] ?? []).includes(option.id)} onChange={() => toggle(question, option.id)} /><span>{option.label}</span></label>)}</div></fieldset>)}{error && <p className="error" role="alert">{error}</p>}<button className="primary submit" type="submit">Enviar respuestas</button></form>
+    </> : <div className="public-success"><span className="eyebrow">ENCUESTA NO DISPONIBLE</span><h1>No encontramos esta encuesta</h1><p>{error || 'Puede estar desactivada o el enlace ya no ser válido.'}</p></div>}
+  </section><footer>Transportes · Cuestionarios</footer></main>
 }
 
 function App() {
@@ -52,6 +92,13 @@ function App() {
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
   const [loading, setLoading] = useState(true)
+  const publicSurveyId = window.location.pathname.match(/^\/encuesta\/([a-f\d]{24})\/?$/i)?.[1]
+
+  async function shareSurvey(survey: Survey) {
+    const url = `${window.location.origin}/encuesta/${survey.id}`
+    try { await navigator.clipboard.writeText(url); setNotice('Enlace copiado. Compártelo para recibir respuestas anónimas.') }
+    catch { setNotice(url) }
+  }
 
   async function loadSurveys() {
     const items = await request<Survey[]>('/api/surveys')
@@ -110,6 +157,7 @@ function App() {
   }
 
   useEffect(() => {
+    if (window.location.pathname.match(/^\/encuesta\/[a-f\d]{24}\/?$/i)) return
     request<User>('/api/auth/me').then(setUser).catch(() => setUser(null)).finally(() => setLoading(false))
   }, [])
 
@@ -240,6 +288,7 @@ function App() {
     })
   }
 
+  if (publicSurveyId) return <PublicSurvey surveyId={publicSurveyId} />
   if (loading) return <main className="centered"><p>Cargando…</p></main>
   if (!user) return <main className="login-page"><form className="login-card" onSubmit={login}>
     <span className="eyebrow">TRANSPORTES</span><h1>Cuestionarios</h1><p>Inicia sesión para continuar.</p>
@@ -274,7 +323,7 @@ function App() {
         </> : <>
           <div className="page-heading users-heading"><span className="eyebrow">ADMINISTRACIÓN</span><div className="heading-row"><div><h1>Encuestas</h1><p>Crea encuestas y administra las que ya existen.</p></div><button className="primary create-user" onClick={createSurvey}><Plus size={17} />Nueva encuesta</button></div></div>
           {error && <p className="error" role="alert">{error}</p>}
-          <div className="survey-grid">{surveys.map(survey => <article className="survey-card" key={survey.id}><div className="card-meta"><span className={`status ${survey.isActive ? 'active' : ''}`}>{survey.isActive ? 'Activa' : 'Borrador'}</span><span>v{survey.version}</span></div><h2>{survey.title}</h2><p>{survey.description || 'Sin descripción.'}</p><div className="admin-survey-meta">{survey.questions.length} {survey.questions.length === 1 ? 'pregunta' : 'preguntas'} · {survey.questions.reduce((sum, question) => sum + question.options.length, 0)} opciones</div><div className="survey-admin-actions"><button className="secondary-button" onClick={() => editSurvey(survey)}><Pencil size={14} />Editar</button><button className={survey.isActive ? 'deactivate-button' : 'activate-button'} onClick={() => setSurveyActive(survey)}>{survey.isActive ? 'Desactivar' : 'Activar'}</button></div></article>)}</div>
+          <div className="survey-grid">{surveys.map(survey => <article className="survey-card" key={survey.id}><div className="card-meta"><span className={`status ${survey.isActive ? 'active' : ''}`}>{survey.isActive ? 'Activa' : 'Borrador'}</span><span>v{survey.version}</span></div><h2>{survey.title}</h2><p>{survey.description || 'Sin descripción.'}</p><div className="admin-survey-meta">{survey.questions.length} {survey.questions.length === 1 ? 'pregunta' : 'preguntas'} · {survey.questions.reduce((sum, question) => sum + question.options.length, 0)} opciones</div><div className="survey-admin-actions"><button className="secondary-button" onClick={() => editSurvey(survey)}><Pencil size={14} />Editar</button>{survey.isActive && <button className="secondary-button" onClick={() => shareSurvey(survey)}><Link2 size={14} />Copiar enlace</button>}<button className={survey.isActive ? 'deactivate-button' : 'activate-button'} onClick={() => setSurveyActive(survey)}>{survey.isActive ? 'Desactivar' : 'Activar'}</button></div></article>)}</div>
           {surveys.length === 0 && <div className="empty"><div className="empty-mark"><ClipboardList size={30} /></div><h2>Aún no hay encuestas</h2><p>Crea tu primera encuesta para empezar a recopilar respuestas.</p></div>}
         </>}
       </> : user.role === 'superadmin' && adminView === 'responses' ? <>
