@@ -54,10 +54,12 @@ export class ResponsesRepository {
     if (filter.from) submittedAt.$gte = filter.from;
     if (filter.toExclusive) submittedAt.$lt = filter.toExclusive;
 
-    return ResponseModel.find({
+    const query: { surveyId: Types.ObjectId; submittedAt?: typeof submittedAt } = {
       surveyId: new Types.ObjectId(surveyId),
-      submittedAt,
-    })
+    };
+    if (filter.from || filter.toExclusive) query.submittedAt = submittedAt;
+
+    return ResponseModel.find(query)
       .select("surveyVersion answers submittedAt")
       .sort({ submittedAt: 1 })
       .lean();
