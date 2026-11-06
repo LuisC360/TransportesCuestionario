@@ -10,6 +10,8 @@ type SurveyDraft = { id?: string; version?: number; title: string; description: 
 type ManagedUser = User & { isActive: boolean; createdAt: string }
 type UserDialog = { kind: 'create' } | { kind: 'email' | 'reset' | 'delete'; target: ManagedUser }
 type SurveyResults = { surveyId: string; totalResponses: number; versions: Array<{ version: number; title: string; responseCount: number; questions: Array<{ questionId: string; prompt: string; responseCount: number; totalSelections: number; options: Array<{ optionId: string; label: string; selectionCount: number; percentageOfResponses: number }> }> }> }
+type AdminView = 'users' | 'surveys' | 'responses'
+const ADMIN_VIEW_STORAGE_KEY = 'transportes-cuestionario-admin-view'
 
 function newSurveyQuestion(): Question {
   return {
@@ -58,7 +60,7 @@ function PublicSurvey({ surveyId }: { surveyId: string }) {
   }
 
   return <main className="shell public-shell"><header className="topbar"><a className="brand" href="/">TC<span>.</span></a><span className="public-label">Encuesta anónima</span></header><section className="content">
-    {loading ? <div className="centered"><p>Cargando encuesta…</p></div> : submitted ? <div className="public-success"><span className="eyebrow">RESPUESTA REGISTRADA</span><h1>¡Gracias por participar!</h1><p>Tu respuesta se guardó de forma anónima.</p></div> : survey ? <>
+    {loading ? <div className="centered"><p>Cargando encuesta…</p></div> : submitted ? <div className="public-success"><span className="eyebrow">RESPUESTA REGISTRADA</span><h1>¡Gracias por participar!</h1><p>Tu respuesta se guardó de forma anónima.</p><button className="primary" onClick={() => { setAnswers({}); setError(''); setSubmitted(false) }}>Responder otra vez</button></div> : survey ? <>
       <div className="page-heading"><span className="eyebrow">ENCUESTA ANÓNIMA · VERSIÓN {survey.version}</span><h1>{survey.title}</h1><p>{survey.description}</p><small className="privacy-note">No necesitas iniciar sesión. No solicitamos datos personales.</small></div>
       <form className="question-list" onSubmit={submit}>{survey.questions.map((question, index) => <fieldset className="question" key={question.id}><legend><span className="question-number">{String(index + 1).padStart(2, '0')}</span>{question.prompt}</legend><p className="hint">{question.minSelections === 0 ? 'Opcional' : `Selecciona al menos ${question.minSelections}`} · Máximo {question.maxSelections}</p><div className="options">{question.options.map(option => <label className="option" key={option.id}><input type={question.maxSelections === 1 ? 'radio' : 'checkbox'} name={question.id} checked={(answers[question.id] ?? []).includes(option.id)} onChange={() => toggle(question, option.id)} /><span>{option.label}</span></label>)}</div></fieldset>)}{error && <p className="error" role="alert">{error}</p>}<button className="primary submit" type="submit">Enviar respuestas</button></form>
     </> : <div className="public-success"><span className="eyebrow">ENCUESTA NO DISPONIBLE</span><h1>No encontramos esta encuesta</h1><p>{error || 'Puede estar desactivada o el enlace ya no ser válido.'}</p></div>}
@@ -71,7 +73,10 @@ function App() {
   const [surveyDraft, setSurveyDraft] = useState<SurveyDraft | null>(null)
   const [savingSurvey, setSavingSurvey] = useState(false)
   const [users, setUsers] = useState<ManagedUser[]>([])
-  const [adminView, setAdminView] = useState<'users' | 'surveys' | 'responses'>('users')
+  const [adminView, setAdminView] = useState<AdminView>(() => {
+    const savedView = window.localStorage.getItem(ADMIN_VIEW_STORAGE_KEY)
+    return savedView === 'users' || savedView === 'surveys' || savedView === 'responses' ? savedView : 'users'
+  })
   const [selectedResultsSurvey, setSelectedResultsSurvey] = useState('')
   const [surveyResults, setSurveyResults] = useState<SurveyResults | null>(null)
   const [resultsLoading, setResultsLoading] = useState(false)
@@ -160,6 +165,10 @@ function App() {
     if (window.location.pathname.match(/^\/encuesta\/[a-f\d]{24}\/?$/i)) return
     request<User>('/api/auth/me').then(setUser).catch(() => setUser(null)).finally(() => setLoading(false))
   }, [])
+
+  useEffect(() => {
+    window.localStorage.setItem(ADMIN_VIEW_STORAGE_KEY, adminView)
+  }, [adminView])
 
   useEffect(() => {
     if (!user) return
@@ -327,7 +336,7 @@ function App() {
           {surveys.length === 0 && <div className="empty"><div className="empty-mark"><ClipboardList size={30} /></div><h2>Aún no hay encuestas</h2><p>Crea tu primera encuesta para empezar a recopilar respuestas.</p></div>}
         </>}
       </> : user.role === 'superadmin' && adminView === 'responses' ? <>
-        <div className="page-heading results-heading"><span className="eyebrow">ANÁLISIS</span><h1>Respuestas de encuestas</h1><p>Consulta los resultados y descarga las respuestas individuales en CSV.</p></div>
+        <div className="page-heading results-heading"><span className="eyebrow">ANÁLISIS</span><h1>Respuestas de encuestas</h1><p>Consulta los resultados y descarga un resumen de respuestas por opción en CSV.</p></div>
         {error && <p className="error" role="alert">{error}</p>}
         <div className="results-toolbar"><label>Encuesta<select value={selectedResultsSurvey} onChange={event => setSelectedResultsSurvey(event.target.value)}><option value="">Selecciona una encuesta</option>{surveys.map(survey => <option key={survey.id} value={survey.id}>{survey.title}</option>)}</select></label><div className="date-filters"><label>Desde<input type="date" value={exportFrom} onChange={event => setExportFrom(event.target.value)} /></label><label>Hasta<input type="date" value={exportTo} onChange={event => setExportTo(event.target.value)} /></label><button className="primary export-button" onClick={exportResponses} disabled={!selectedResultsSurvey || exporting}><Download size={16} />{exporting ? 'Preparando CSV…' : 'Exportar CSV'}</button></div></div>
         {!surveys.length && <div className="empty"><div className="empty-mark"><BarChart3 size={30} /></div><h2>Aún no hay encuestas</h2><p>Crea una encuesta antes de consultar sus respuestas.</p></div>}
