@@ -17,38 +17,41 @@ export class ExportsService {
         : undefined,
     });
 
-    const versionByNumber = new Map(survey.versions.map((version) => [version.version, version]));
-    const questionColumns = survey.versions.flatMap((version) =>
-      version.questions.map((question) => ({
-        key: `${version.version}:${question.id}`,
-        version: version.version,
-        questionId: question.id,
-        prompt: question.prompt,
-        optionLabels: new Map(question.options.map((option) => [option.id, option.label])),
-      })),
-    );
+    const responseCountByVersion = new Map<number, number>();
+    const selectionCountByOption = new Map<string, number>();
+    for (const response of responses) {
+      responseCountByVersion.set(
+        response.surveyVersion,
+        (responseCountByVersion.get(response.surveyVersion) ?? 0) + 1,
+      );
+      for (const answer of response.answers) {
+        for (const optionId of answer.optionIds) {
+          const key = JSON.stringify([response.surveyVersion, answer.questionId, optionId]);
+          selectionCountByOption.set(key, (selectionCountByOption.get(key) ?? 0) + 1);
+        }
+      }
+    }
 
     const header = [
-      "submittedAt",
       "surveyVersion",
-      ...questionColumns.map((column) => `V${column.version}: ${column.prompt}`),
+      "question",
+      "option",
+      "selectionCount",
+      "responseCount",
+      "percentageOfResponses",
     ];
-    const rows = responses.map((response) => {
-      const version = versionByNumber.get(response.surveyVersion);
-      const answers = new Map(
-        response.answers.map((answer) => [answer.questionId, answer.optionIds]),
-      );
-      const values = questionColumns.map((column) => {
-        if (column.version !== response.surveyVersion || !version) return "";
-        const selectedIds = answers.get(column.questionId) ?? [];
-        return selectedIds
-          .map((optionId) => column.optionLabels.get(optionId))
-          .filter((label): label is string => label !== undefined)
-          .join("; ");
-      });
-
-      return [response.submittedAt.toISOString(), response.surveyVersion, ...values];
-    });
+    const rows = survey.versions.flatMap((version) =>
+      version.questions.flatMap((question) =>
+        question.options.map((option) => {
+          const responseCount = responseCountByVersion.get(version.version) ?? 0;
+          const selectionCount =
+            selectionCountByOption.get(JSON.stringify([version.version, question.id, option.id])) ?? 0;
+          const percentage =
+            responseCount === 0 ? 0 : Number(((selectionCount / responseCount) * 100).toFixed(1));
+          return [version.version, question.prompt, option.label, selectionCount, responseCount, percentage];
+        }),
+      ),
+    );
 
     const csv = `\uFEFF${[header, ...rows].map((row) => row.map(escapeCsvCell).join(",")).join("\r\n")}`;
     const from = filters.from ?? "start";
