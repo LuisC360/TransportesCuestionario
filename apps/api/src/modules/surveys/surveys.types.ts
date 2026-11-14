@@ -6,6 +6,7 @@ export interface SurveyOption {
 export interface SurveyQuestion {
   id: string;
   prompt: string;
+  type: "choice" | "open";
   options: SurveyOption[];
   minSelections: number;
   maxSelections: number;
@@ -35,6 +36,7 @@ export interface SurveyDefinitionInput {
   questions: Array<{
     id?: string;
     prompt: string;
+    type?: "choice" | "open";
     options: Array<{ id?: string; label: string }>;
     minSelections: number;
     maxSelections?: number;

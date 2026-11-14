@@ -9,11 +9,22 @@ const questionSchema = z
   .object({
     id: z.string().trim().min(1).max(100).optional(),
     prompt: z.string().trim().min(1).max(500),
-    options: z.array(optionSchema).min(2).max(100),
+    type: z.enum(["choice", "open"]).default("choice"),
+    options: z.array(optionSchema).max(100).default([]),
     minSelections: z.number().int().min(0).default(0),
     maxSelections: z.number().int().min(1).optional(),
   })
   .superRefine((question, ctx) => {
+    if (question.type === "open") {
+      if (question.options.length || question.minSelections !== 0 || (question.maxSelections ?? 1) !== 1) {
+        ctx.addIssue({ code: "custom", path: ["type"], message: "Open questions cannot have options or selection limits" });
+      }
+      return;
+    }
+    if (question.options.length < 2) {
+      ctx.addIssue({ code: "custom", path: ["options"], message: "Choice questions need at least two options" });
+      return;
+    }
     const maxSelections = question.maxSelections ?? question.options.length;
     if (maxSelections > question.options.length) {
       ctx.addIssue({

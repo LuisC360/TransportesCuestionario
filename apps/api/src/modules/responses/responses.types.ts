@@ -1,6 +1,7 @@
 export interface SubmittedAnswer {
   questionId: string;
   optionIds: string[];
+  text?: string;
 }
 
 export interface SubmitResponseInput {
