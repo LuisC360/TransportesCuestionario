@@ -6,6 +6,7 @@ const answerSchema = new Schema(
   {
     questionId: { type: String, required: true },
     optionIds: { type: [String], required: true },
+    text: { type: String, default: undefined, maxlength: 5000 },
   },
   { _id: false },
 );

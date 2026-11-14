@@ -19,12 +19,17 @@ export class ExportsService {
 
     const responseCountByVersion = new Map<number, number>();
     const selectionCountByOption = new Map<string, number>();
+    const textCountByAnswer = new Map<string, number>();
     for (const response of responses) {
       responseCountByVersion.set(
         response.surveyVersion,
         (responseCountByVersion.get(response.surveyVersion) ?? 0) + 1,
       );
       for (const answer of response.answers) {
+        if (answer.text) {
+          const key = JSON.stringify([response.surveyVersion, answer.questionId, answer.text]);
+          textCountByAnswer.set(key, (textCountByAnswer.get(key) ?? 0) + 1);
+        }
         for (const optionId of answer.optionIds) {
           const key = JSON.stringify([response.surveyVersion, answer.questionId, optionId]);
           selectionCountByOption.set(key, (selectionCountByOption.get(key) ?? 0) + 1);
@@ -35,14 +40,22 @@ export class ExportsService {
     const header = [
       "surveyVersion",
       "question",
-      "option",
+      "answer",
       "selectionCount",
       "responseCount",
       "percentageOfResponses",
     ];
     const rows = survey.versions.flatMap((version) =>
       version.questions.flatMap((question) =>
-        question.options.map((option) => {
+        question.type === "open"
+          ? [...textCountByAnswer.entries()].flatMap(([key, selectionCount]) => {
+              const [answerVersion, questionId, text] = JSON.parse(key) as [number, string, string];
+              if (answerVersion !== version.version || questionId !== question.id) return [];
+              const responseCount = responseCountByVersion.get(version.version) ?? 0;
+              const percentage = responseCount === 0 ? 0 : Number(((selectionCount / responseCount) * 100).toFixed(1));
+              return [[version.version, question.prompt, text, selectionCount, responseCount, percentage]];
+            })
+          : question.options.map((option) => {
           const responseCount = responseCountByVersion.get(version.version) ?? 0;
           const selectionCount =
             selectionCountByOption.get(JSON.stringify([version.version, question.id, option.id])) ?? 0;

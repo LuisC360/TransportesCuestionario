@@ -14,7 +14,8 @@ const questionSchema = new Schema(
   {
     id: { type: String, required: true },
     prompt: { type: String, required: true, trim: true },
-    options: { type: [optionSchema], required: true },
+    type: { type: String, enum: ["choice", "open"], default: "choice" },
+    options: { type: [optionSchema], default: [] },
     minSelections: { type: Number, required: true, min: 0 },
     maxSelections: { type: Number, required: true, min: 1 },
   },
