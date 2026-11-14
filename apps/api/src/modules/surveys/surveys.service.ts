@@ -113,6 +113,7 @@ export class SurveysService {
       questions: input.questions.map((question) => ({
         id: question.id ?? randomUUID(),
         prompt: question.prompt,
+        type: question.type ?? "choice",
         minSelections: question.minSelections,
         maxSelections: question.maxSelections ?? question.options.length,
         options: question.options.map((option) => ({
@@ -154,6 +155,7 @@ export class SurveysService {
       questions: definition.questions.map((question) => ({
         id: question.id,
         prompt: question.prompt,
+        type: question.type ?? "choice",
         minSelections: question.minSelections,
         maxSelections: question.maxSelections,
         options: question.options.map((option) => ({ id: option.id, label: option.label })),

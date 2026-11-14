@@ -37,6 +37,13 @@ export class ResponsesService {
       const answer = answersByQuestionId.get(question.id);
       if (!answer) throw new HttpError(400, `Missing answer for question ${question.id}`);
 
+      if (question.type === "open") {
+        const text = answer.text?.trim() ?? "";
+        if (answer.optionIds.length || !text) throw new HttpError(400, `A text answer is required for question ${question.id}`);
+        return { questionId: question.id, optionIds: [], text };
+      }
+      if (answer.text !== undefined) throw new HttpError(400, `Unexpected text answer for question ${question.id}`);
+
       const selectedOptionIds = new Set(answer.optionIds);
       if (
         answer.optionIds.some(
@@ -102,6 +109,7 @@ export class ResponsesService {
         return {
           questionId: question.id,
           prompt: question.prompt,
+          type: question.type ?? "choice",
           responseCount,
           totalSelections: options.reduce((sum, option) => sum + option.selectionCount, 0),
           options,

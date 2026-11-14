@@ -3,6 +3,7 @@ import { z } from "zod";
 const answerSchema = z.object({
   questionId: z.string().trim().min(1).max(100),
   optionIds: z.array(z.string().trim().min(1).max(100)).max(100),
+  text: z.string().max(5000).optional(),
 });
 
 export const submitResponseSchema = z
